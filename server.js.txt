@@ -1,0 +1,43 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const { WebhookClient } = require('dialogflow-fulfillment');
+const mongoose = require('mongoose');
+
+const app = express();
+app.use(bodyParser.json());
+
+// MongoDB connection
+mongoose.connect('mongodb://localhost:27017/loginBotDB', { useNewUrlParser: true, useUnifiedTopology: true });
+
+const userSchema = new mongoose.Schema({
+  email: String,
+  password: String
+});
+
+const User = mongoose.model('User', userSchema);
+
+app.post('/webhook', (req, res) => {
+  const agent = new WebhookClient({ request: req, response: res });
+
+  function login(agent) {
+    const email = agent.parameters.email;
+    const password = agent.parameters.password;
+
+    const newUser = new User({ email, password });
+    newUser.save(err => {
+      if (err) {
+        agent.add('There was an error registering your account.');
+      } else {
+        agent.add('Your account has been registered.');
+      }
+    });
+  }
+
+  let intentMap = new Map();
+  intentMap.set('Login', login);
+  agent.handleRequest(intentMap);
+});
+
+app.listen(3000, () => {
+  console.log('Server is running on port 3000');
+});

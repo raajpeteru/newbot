@@ -1,0 +1,71 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const twilio = require('twilio');
+const mysql = require('mysql');
+
+const app = express();
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+
+const accountSid = 'your_twilio_account_sid';
+const authToken = 'your_twilio_auth_token';
+const client = new twilio(accountSid, authToken);
+
+const db = mysql.createConnection({
+  host: 'localhost',
+  user: 'your_db_user',
+  password: 'your_db_password',
+  database: 'your_db_name'
+});
+
+db.connect((err) => {
+  if (err) throw err;
+  console.log('Connected to database');
+});
+
+app.post('/webhook', (req, res) => {
+  const message = req.body.Body.toLowerCase();
+  const from = req.body.From;
+
+  if (message.includes('i want to log in')) {
+    client.messages.create({
+      body: 'Please enter your email:',
+      from: 'whatsapp:+14155238886',
+      to: from
+    });
+  } else if (message.includes('@')) { // rudimentary email check
+    // Save email to session
+    req.session.email = message;
+
+    client.messages.create({
+      body: 'Please enter your password:',
+      from: 'whatsapp:+14155238886',
+      to: from
+    });
+  } else if (req.session.email) {
+    // Save to database
+    const user = {
+      email: req.session.email,
+      password: message
+    };
+
+    db.query('INSERT INTO users SET ?', user, (err, results) => {
+      if (err) throw err;
+      client.messages.create({
+        body: 'Your account has been registered.',
+        from: 'whatsapp:+14155238886',
+        to: from
+      });
+    });
+
+    // Clear session
+    req.session.email = null;
+  }
+
+  res.sendStatus(200);
+});
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
